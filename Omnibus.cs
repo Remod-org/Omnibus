@@ -8,7 +8,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("Omnibus", "RFC1920", "1.0.1")]
+    [Info("Omnibus", "RFC1920", "1.0.2")]
     [Description("Simple all-in-one plugin for PVE and decay management")]
     class Omnibus : RustPlugin
     {
@@ -17,7 +17,7 @@ namespace Oxide.Plugins
         private bool enabled = true;
 
         [PluginReference]
-        private readonly Plugin JPipes, NoDecay, NextGenPVE, TruePVE;
+        private readonly Plugin JPipes, NoDecay, NextGenPVE, TruePVE, NTeleportation, RTeleportation, Teleportication;
 
         private readonly Dictionary<ulong, TPTimer> TeleportTimers = new Dictionary<ulong, TPTimer>();
         private SortedDictionary<string, Vector3> monPos  = new SortedDictionary<string, Vector3>();
@@ -32,6 +32,7 @@ namespace Oxide.Plugins
 
         #region init
         void Loaded() => LoadConfigValues();
+        void Unload() => SaveData();
 
         void Init()
         {
@@ -48,6 +49,21 @@ namespace Oxide.Plugins
             if(NextGenPVE != null)
             {
                 Puts("NextGenPVE will conflict.  Disabling Omnibus.");
+                enabled = false;
+            }
+            if(NTeleportation != null)
+            {
+                Puts("NTeleportation will conflict.  Disabling Omnibus.");
+                enabled = false;
+            }
+            if(RTeleportation != null)
+            {
+                Puts("RTeleportation will conflict.  Disabling Omnibus.");
+                enabled = false;
+            }
+            if(Teleportication  != null)
+            {
+                Puts("Teleportication will conflict.  Disabling Omnibus.");
                 enabled = false;
             }
 
@@ -69,6 +85,7 @@ namespace Oxide.Plugins
                 ["town"] = "Town",
                 ["outpost"] = "Outpost",
                 ["bandit"] = "Bandit",
+                ["townset"] = "Town location has been set to {0}!",
                 ["teleporting"] = "Teleporting to {0} in {1} seconds..."
             }, this);
         }
@@ -88,6 +105,7 @@ namespace Oxide.Plugins
         [Command("town")]
         private void CmdTownTeleport(IPlayer iplayer, string command, string[] args)
         {
+            if (!enabled) return;
             if (iplayer.Id == "server_console") return;
             var player = iplayer.Object as BasePlayer;
             if (args.Length > 0)
