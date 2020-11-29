@@ -9,7 +9,7 @@ using UnityEngine;
 namespace Oxide.Plugins
 {
     [Info("Omnibus", "RFC1920", "1.0.2")]
-    [Description("Simple all-in-one plugin for PVE and decay management")]
+    [Description("Simple all-in-one plugin for PVE, town teleport, and decay management")]
     class Omnibus : RustPlugin
     {
         #region vars
@@ -115,6 +115,7 @@ namespace Oxide.Plugins
                     if (!iplayer.HasPermission(permAdmin)) { Message(iplayer, "notauthorized"); return; }
                     if (teleport.ContainsKey("town")) teleport["town"] = player.transform.position;
                     else teleport.Add("town", player.transform.position);
+                    SaveData();
                     switch (command)
                     {
                         case "town":
@@ -124,15 +125,18 @@ namespace Oxide.Plugins
                     return;
                 }
             }
-            if (!TeleportTimers.ContainsKey(player.userID))
+            if (teleport.ContainsKey(command))
             {
-                TeleportTimers.Add(player.userID, new TPTimer() { type = command, start = Time.realtimeSinceStartup, countdown = 5f, source = player, targetName = Lang(command), targetLocation = teleport[command] });
-                HandleTimer(player.userID, command, true);
-                Message(iplayer, "teleporting", command, "5");
-            }
-            else if (TeleportTimers[player.userID].countdown == 0)
-            {
-                Teleport(player, teleport[command], command);
+                if (!TeleportTimers.ContainsKey(player.userID))
+                {
+                    TeleportTimers.Add(player.userID, new TPTimer() { type = command, start = Time.realtimeSinceStartup, countdown = 5f, source = player, targetName = Lang(command), targetLocation = teleport[command] });
+                    HandleTimer(player.userID, command, true);
+                    Message(iplayer, "teleporting", command, "5");
+                }
+                else if (TeleportTimers[player.userID].countdown == 0)
+                {
+                    Teleport(player, teleport[command], command);
+                }
             }
         }
 
