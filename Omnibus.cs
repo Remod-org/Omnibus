@@ -1,5 +1,10 @@
 ﻿using Oxide.Core;
+using Oxide.Core.Libraries.Covalence;
 using Oxide.Core.Plugins;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text.RegularExpressions;
+using UnityEngine;
 
 namespace Oxide.Plugins
 {
@@ -13,6 +18,16 @@ namespace Oxide.Plugins
 
         [PluginReference]
         private readonly Plugin JPipes, NoDecay, NextGenPVE, TruePVE;
+
+        private readonly Dictionary<ulong, TPTimer> TeleportTimers = new Dictionary<ulong, TPTimer>();
+        private SortedDictionary<string, Vector3> monPos  = new SortedDictionary<string, Vector3>();
+        Dictionary<string, Vector3> teleport = new Dictionary<string, Vector3>();
+        private const string permAdmin = "omnibus.admin";
+        #endregion
+
+        #region Message
+        private string Lang(string key, string id = null, params object[] args) => string.Format(lang.GetMessage(key, this, id), args);
+        private void Message(IPlayer player, string key, params object[] args) => player.Message(Lang(key, player.Id, args));
         #endregion
 
         #region init
@@ -35,8 +50,73 @@ namespace Oxide.Plugins
                 Puts("NextGenPVE will conflict.  Disabling Omnibus.");
                 enabled = false;
             }
+
+            permission.RegisterPermission(permAdmin, this);
+            AddCovalenceCommand("town", "CmdTownTeleport");
+            AddCovalenceCommand("bandit", "CmdTownTeleport");
+            AddCovalenceCommand("outpost", "CmdTownTeleport");
+            LoadData();
+            FindMonuments();
+        }
+
+        private void LoadData() => teleport = Interface.Oxide.DataFileSystem.ReadObject<Dictionary<string, Vector3>>($"{Name}/teleport");
+        private void SaveData() => Interface.Oxide.DataFileSystem.WriteObject($"{Name}/teleport", teleport);
+
+        protected override void LoadDefaultMessages()
+        {
+            lang.RegisterMessages(new Dictionary<string, string>
+            {
+                ["town"] = "Town",
+                ["outpost"] = "Outpost",
+                ["bandit"] = "Bandit",
+                ["teleporting"] = "Teleporting to {0} in {1} seconds..."
+            }, this);
         }
         #endregion
+
+        public class TPTimer
+        {
+            public Timer timer;
+            public float start;
+            public float countdown;
+            public string type;
+            public BasePlayer source;
+            public string targetName;
+            public Vector3 targetLocation;
+        }
+
+        [Command("town")]
+        private void CmdTownTeleport(IPlayer iplayer, string command, string[] args)
+        {
+            if (iplayer.Id == "server_console") return;
+            var player = iplayer.Object as BasePlayer;
+            if (args.Length > 0)
+            {
+                if (args[0] == "set")
+                {
+                    if (!iplayer.HasPermission(permAdmin)) { Message(iplayer, "notauthorized"); return; }
+                    if (teleport.ContainsKey("town")) teleport["town"] = player.transform.position;
+                    else teleport.Add("town", player.transform.position);
+                    switch (command)
+                    {
+                        case "town":
+                            Message(iplayer, "townset", player.transform.position.ToString());
+                            break;
+                    }
+                    return;
+                }
+            }
+            if (!TeleportTimers.ContainsKey(player.userID))
+            {
+                TeleportTimers.Add(player.userID, new TPTimer() { type = command, start = Time.realtimeSinceStartup, countdown = 5f, source = player, targetName = Lang(command), targetLocation = teleport[command] });
+                HandleTimer(player.userID, command, true);
+                Message(iplayer, "teleporting", command, "5");
+            }
+            else if (TeleportTimers[player.userID].countdown == 0)
+            {
+                Teleport(player, teleport[command], command);
+            }
+        }
 
         #region main
         object OnEntityTakeDamage(BaseCombatEntity entity, HitInfo hitinfo)
@@ -125,6 +205,106 @@ namespace Oxide.Plugins
         #endregion
 
         #region helpers
+        string RandomString()
+        {
+            const string chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
+            List<char> charList = chars.ToList();
+
+            string random = "";
+
+            for (int i = 0; i <= UnityEngine.Random.Range(5, 10); i++)
+                random = random + charList[UnityEngine.Random.Range(0, charList.Count - 1)];
+
+            return random;
+        }
+
+        public void Teleport(BasePlayer player, Vector3 position, string type="")
+        {
+            HandleTimer(player.userID, type);
+
+            if(player.net?.connection != null) player.SetPlayerFlag(BasePlayer.PlayerFlags.ReceivingSnapshot, true);
+
+            player.SetParent(null, true, true);
+            player.EnsureDismounted();
+            player.Teleport(position);
+            player.UpdateNetworkGroup();
+            player.StartSleeping();
+            player.SendNetworkUpdateImmediate(false);
+
+            if(player.net?.connection != null) player.ClientRPCPlayer(null, player, "StartLoading");
+        }
+
+        private void StartSleeping(BasePlayer player)
+        {
+            if (player.IsSleeping()) return;
+            player.SetPlayerFlag(BasePlayer.PlayerFlags.Sleeping, true);
+            if (!BasePlayer.sleepingPlayerList.Contains(player)) BasePlayer.sleepingPlayerList.Add(player);
+            player.CancelInvoke("InventoryUpdate");
+            //player.inventory.crafting.CancelAll(true);
+            //player.UpdatePlayerCollider(true, false);
+        }
+
+        public void HandleTimer(ulong userid, string type, bool start = false)
+        {
+            if (TeleportTimers.ContainsKey(userid))
+            {
+                if (start)
+                {
+                    TeleportTimers[userid].timer = timer.Once(TeleportTimers[userid].countdown, () => { Teleport(TeleportTimers[userid].source, TeleportTimers[userid].targetLocation, type); });
+                }
+                else
+                {
+                    if (TeleportTimers.ContainsKey(userid))
+                    {
+                        TeleportTimers[userid].timer.Destroy();
+                        TeleportTimers.Remove(userid);
+                    }
+                }
+            }
+        }
+
+        void FindMonuments()
+        {
+            Vector3 extents = Vector3.zero;
+            string name = null;
+            foreach (MonumentInfo monument in UnityEngine.Object.FindObjectsOfType<MonumentInfo>())
+            {
+                name = Regex.Match(monument.name, @"\w{6}\/(.+\/)(.+)\.(.+)").Groups[2].Value.Replace("_", " ").Replace(" 1", "").Titleize();
+                if (monPos.ContainsKey(name)) continue;
+
+                extents = monument.Bounds.extents;
+                if(monument.name.Contains("compound"))
+                {
+                    List<BaseEntity> ents = new List<BaseEntity>();
+                    Vis.Entities(monument.transform.position, 50, ents);
+                    foreach(BaseEntity entity in ents)
+                    {
+                        if(entity.PrefabName.Contains("piano"))
+                        {
+                            Vector3 outpost = entity.transform.position + new Vector3(1f, 0.1f, 1f);
+                            if (teleport.ContainsKey("outpost")) teleport["outpost"] = outpost;
+                            else teleport.Add("outpost", outpost);
+                        }
+                    }
+                }
+                else if(monument.name.Contains("bandit"))
+                {
+                    List<BaseEntity> ents = new List<BaseEntity>();
+                    Vis.Entities(monument.transform.position, 50, ents);
+                    foreach(BaseEntity entity in ents)
+                    {
+                        if(entity.PrefabName.Contains("workbench"))
+                        {
+                            Vector3 bandit = Vector3.Lerp(monument.transform.position, entity.transform.position, 0.45f) + new Vector3(0, 1.5f, 0);
+                            if (teleport.ContainsKey("bandit")) teleport["bandit"] = bandit;
+                            else teleport.Add("bandit", bandit);
+                        }
+                    }
+                }
+            }
+            SaveData();
+        }
+
         private bool IsAutoTurret(HitInfo hitinfo, out AttackEntity weapon)
         {
             // Check for turret initiator

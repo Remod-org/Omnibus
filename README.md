@@ -1,11 +1,18 @@
 # Omnibus
-Simple all-in-one plugin for PVE and Decay management for Rust
+Simple all-in-one plugin for PVE, basic teleport,  and decay management for Rust
 
-This plugin has a simplified config and implementation compared to other PVE and decay plugins.
+This plugin has a simplified config and implementation compared to other PVE, teleport, and decay plugins.
 
-It will facilitate PVE (player to player and player to building) as well as basic decay control.
+It will facilitate PVE (player to player and player to building), teleport to town/bandit/outpost, as well as basic decay control.
 
-No permissions are required and there are no commands.
+### Permissions
+  - `omnibus.admin` -- Required only for /town set
+
+### Commands
+  - `/town` -- Go to town set by admin
+  - `/town set` -- For admin to set town location
+  - `/bandit` -- Teleport to Bandit Town
+  - `/outpost` -- Teleport to the Outpost
 
 ### Config
 
