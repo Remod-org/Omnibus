@@ -5,6 +5,8 @@ This plugin has a simplified config and implementation compared to other PVE, te
 
 It will facilitate PVE (player to player and player to building), teleport to town/bandit/outpost, as well as basic decay control.
 
+No home/sethome functionality exists.  Teleports are available only for bandit, outpost, and town (if set).
+
 ### Permissions
   - `omnibus.admin` -- Required only for /town set
 
