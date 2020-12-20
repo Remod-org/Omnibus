@@ -8,7 +8,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("Omnibus", "RFC1920", "1.0.2")]
+    [Info("Omnibus", "RFC1920", "1.0.3")]
     [Description("Simple all-in-one plugin for PVE, town teleport, and decay management")]
     class Omnibus : RustPlugin
     {
@@ -20,7 +20,6 @@ namespace Oxide.Plugins
         private readonly Plugin JPipes, NoDecay, NextGenPVE, TruePVE, NTeleportation, RTeleportation, Teleportication;
 
         private readonly Dictionary<ulong, TPTimer> TeleportTimers = new Dictionary<ulong, TPTimer>();
-        private SortedDictionary<string, Vector3> monPos  = new SortedDictionary<string, Vector3>();
         Dictionary<string, Vector3> teleport = new Dictionary<string, Vector3>();
         private const string permAdmin = "omnibus.admin";
         #endregion
@@ -188,16 +187,6 @@ namespace Oxide.Plugins
                 default:
                     if(configData.Global.EnablePVE)
                     {
-                        if (hitinfo.Initiator == null)
-                        {
-                            AttackEntity turret;
-                            if (IsAutoTurret(hitinfo, out turret))
-                            {
-                                hitinfo.Initiator = turret as BaseEntity;
-                            }
-                            return null;
-                        }
-
                         try
                         {
                             object CanTakeDamage = Interface.CallHook("CanEntityTakeDamage", new object[] { entity, hitinfo });
@@ -227,19 +216,6 @@ namespace Oxide.Plugins
         #endregion
 
         #region helpers
-        string RandomString()
-        {
-            const string chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
-            List<char> charList = chars.ToList();
-
-            string random = "";
-
-            for (int i = 0; i <= UnityEngine.Random.Range(5, 10); i++)
-                random = random + charList[UnityEngine.Random.Range(0, charList.Count - 1)];
-
-            return random;
-        }
-
         public void Teleport(BasePlayer player, Vector3 position, string type="")
         {
             HandleTimer(player.userID, type);
@@ -287,16 +263,15 @@ namespace Oxide.Plugins
 
         void FindMonuments()
         {
-            Vector3 extents = Vector3.zero;
             string name = null;
+            int i = 0;
             foreach (MonumentInfo monument in UnityEngine.Object.FindObjectsOfType<MonumentInfo>())
             {
                 name = Regex.Match(monument.name, @"\w{6}\/(.+\/)(.+)\.(.+)").Groups[2].Value.Replace("_", " ").Replace(" 1", "").Titleize();
-                if (monPos.ContainsKey(name)) continue;
 
-                extents = monument.Bounds.extents;
                 if(monument.name.Contains("compound"))
                 {
+                    i++;
                     List<BaseEntity> ents = new List<BaseEntity>();
                     Vis.Entities(monument.transform.position, 50, ents);
                     foreach(BaseEntity entity in ents)
@@ -311,6 +286,7 @@ namespace Oxide.Plugins
                 }
                 else if(monument.name.Contains("bandit"))
                 {
+                    i++;
                     List<BaseEntity> ents = new List<BaseEntity>();
                     Vis.Entities(monument.transform.position, 50, ents);
                     foreach(BaseEntity entity in ents)
@@ -323,23 +299,9 @@ namespace Oxide.Plugins
                         }
                     }
                 }
+                if (i > 1) break;
             }
             SaveData();
-        }
-
-        private bool IsAutoTurret(HitInfo hitinfo, out AttackEntity weapon)
-        {
-            // Check for turret initiator
-            var turret = hitinfo.Weapon?.GetComponentInParent<AutoTurret>();
-            if (turret != null)
-            {
-                DoLog($"Turret weapon '{hitinfo.Weapon?.ShortPrefabName}' is initiator");
-                weapon = hitinfo.Weapon;
-                return true;
-            }
-
-            weapon = null;
-            return false;
         }
 
         private void DoLog(string message)
