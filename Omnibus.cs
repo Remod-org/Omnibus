@@ -1,16 +1,15 @@
-﻿using Oxide.Core;
+using Oxide.Core;
 using Oxide.Core.Libraries.Covalence;
 using Oxide.Core.Plugins;
 using System.Collections.Generic;
-using System.Linq;
 using System.Text.RegularExpressions;
 using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("Omnibus", "RFC1920", "1.0.3")]
+    [Info("Omnibus", "RFC1920", "1.0.4")]
     [Description("Simple all-in-one plugin for PVE, town teleport, and decay management")]
-    class Omnibus : RustPlugin
+    internal class Omnibus : RustPlugin
     {
         #region vars
         private ConfigData configData;
@@ -20,7 +19,7 @@ namespace Oxide.Plugins
         private readonly Plugin JPipes, NoDecay, NextGenPVE, TruePVE, NTeleportation, RTeleportation, Teleportication;
 
         private readonly Dictionary<ulong, TPTimer> TeleportTimers = new Dictionary<ulong, TPTimer>();
-        Dictionary<string, Vector3> teleport = new Dictionary<string, Vector3>();
+        private Dictionary<string, Vector3> teleport = new Dictionary<string, Vector3>();
         private const string permAdmin = "omnibus.admin";
         #endregion
 
@@ -30,37 +29,37 @@ namespace Oxide.Plugins
         #endregion
 
         #region init
-        void Loaded() => LoadConfigValues();
-        void Unload() => SaveData();
+        private void Loaded() => LoadConfigValues();
+        private void Unload() => SaveData();
 
-        void Init()
+        private void Init()
         {
-            if(NoDecay != null)
+            if (NoDecay != null)
             {
                 Puts("NoDecay will conflict.  Disabling Omnibus.");
                 enabled = false;
             }
-            if(TruePVE != null)
+            if (TruePVE != null)
             {
                 Puts("TruePVE will conflict.  Disabling Omnibus.");
                 enabled = false;
             }
-            if(NextGenPVE != null)
+            if (NextGenPVE != null)
             {
                 Puts("NextGenPVE will conflict.  Disabling Omnibus.");
                 enabled = false;
             }
-            if(NTeleportation != null)
+            if (NTeleportation != null)
             {
                 Puts("NTeleportation will conflict.  Disabling Omnibus.");
                 enabled = false;
             }
-            if(RTeleportation != null)
+            if (RTeleportation != null)
             {
                 Puts("RTeleportation will conflict.  Disabling Omnibus.");
                 enabled = false;
             }
-            if(Teleportication  != null)
+            if (Teleportication != null)
             {
                 Puts("Teleportication will conflict.  Disabling Omnibus.");
                 enabled = false;
@@ -104,25 +103,30 @@ namespace Oxide.Plugins
         [Command("town")]
         private void CmdTownTeleport(IPlayer iplayer, string command, string[] args)
         {
-            if (!enabled) return;
-            if (iplayer.Id == "server_console") return;
-            var player = iplayer.Object as BasePlayer;
-            if (args.Length > 0)
+            if (!enabled)
             {
-                if (args[0] == "set")
+                return;
+            }
+
+            if (iplayer.Id == "server_console")
+            {
+                return;
+            }
+
+            var player = iplayer.Object as BasePlayer;
+            if (args.Length > 0 && args[0] == "set")
+            {
+                if (!iplayer.HasPermission(permAdmin)) { Message(iplayer, "notauthorized"); return; }
+                teleport["town"] = player.transform.position;
+
+                SaveData();
+                switch (command)
                 {
-                    if (!iplayer.HasPermission(permAdmin)) { Message(iplayer, "notauthorized"); return; }
-                    if (teleport.ContainsKey("town")) teleport["town"] = player.transform.position;
-                    else teleport.Add("town", player.transform.position);
-                    SaveData();
-                    switch (command)
-                    {
-                        case "town":
-                            Message(iplayer, "townset", player.transform.position.ToString());
-                            break;
-                    }
-                    return;
+                    case "town":
+                        Message(iplayer, "townset", player.transform.position.ToString());
+                        break;
                 }
+                return;
             }
             if (teleport.ContainsKey(command))
             {
@@ -140,18 +144,23 @@ namespace Oxide.Plugins
         }
 
         #region main
-        object OnEntityTakeDamage(BaseCombatEntity entity, HitInfo hitinfo)
+        private object OnEntityTakeDamage(BaseCombatEntity entity, HitInfo hitinfo)
         {
-            if (!enabled) return null;
-            if (entity == null || hitinfo == null) return null;
+            if (!enabled)
+            {
+                return null;
+            }
+
+            if (entity == null || hitinfo == null)
+            {
+                return null;
+            }
 
             float damageAmount = 0f;
             string entity_name = entity.LookupPrefab().name;
             ulong owner = entity.OwnerID;
 
-            string majority = hitinfo.damageTypes.GetMajorityDamageType().ToString();
-
-            switch(majority)
+            switch(hitinfo.damageTypes.GetMajorityDamageType().ToString())
             {
                 case "Decay":
                     float before = hitinfo.damageTypes.Get(Rust.DamageType.Decay);
@@ -159,14 +168,11 @@ namespace Oxide.Plugins
 
                     if (entity is BuildingBlock)
                     {
-                        if ((bool)JPipes?.Call("IsPipe", entity))
+                        if ((bool)JPipes?.Call("IsPipe", entity) && (bool)JPipes?.Call("IsNoDecayEnabled"))
                         {
-                            if ((bool)JPipes?.Call("IsNoDecayEnabled"))
-                            {
-                                DoLog("Found a JPipe with nodecay enabled");
-                                hitinfo.damageTypes.Scale(Rust.DamageType.Decay, 0f);
-                                return null;
-                            }
+                            DoLog("Found a JPipe with nodecay enabled");
+                            hitinfo.damageTypes.Scale(Rust.DamageType.Decay, 0f);
+                            return null;
                         }
 
                         damageAmount = before * configData.Global.DecayMultiplier;
@@ -179,29 +185,40 @@ namespace Oxide.Plugins
                         if (entity.health == 0)
                         {
                             DoLog($"Entity {entity_name} completely decayed - destroying!");
-                            if (entity == null) return;
+                            if (entity == null)
+                            {
+                                return;
+                            }
+
                             entity.Kill(BaseNetworkable.DestroyMode.Gib);
                         }
                     });
                     return true; // Cancels this hook (for decay only).  Decay handled on NextTick.
                 default:
-                    if(configData.Global.EnablePVE)
+                    if (configData.Global.EnablePVE)
                     {
                         try
                         {
                             object CanTakeDamage = Interface.CallHook("CanEntityTakeDamage", new object[] { entity, hitinfo });
-                            if (CanTakeDamage != null && CanTakeDamage is bool && (bool)CanTakeDamage) return null;
+                            if (CanTakeDamage != null && CanTakeDamage is bool && (bool)CanTakeDamage)
+                            {
+                                return null;
+                            }
                         }
                         catch { }
 
-                        var source = (hitinfo.Initiator as BaseEntity).GetType().Name;
-                        var target = (entity as BaseEntity).GetType().Name;
+                        string source = hitinfo.Initiator?.GetType().Name;
+                        string target = entity?.GetType().Name;
 
-                        if (source == "BasePlayer" && target == "BasePlayer") return true; // Block player to player damage
+                        if (source == "BasePlayer" && target == "BasePlayer")
+                        {
+                            return true; // Block player to player damage
+                        }
 
                         if (source == "BasePlayer" && (target == "BuildingBlock" || target == "Door" || target == "wall.window"))
                         {
-                            if(owner == (hitinfo.Initiator as BasePlayer).userID)
+                            BasePlayer pl = hitinfo.Initiator as BasePlayer;
+                            if (pl != null && owner == pl.userID)
                             {
                                 return null;
                             }
@@ -220,7 +237,10 @@ namespace Oxide.Plugins
         {
             HandleTimer(player.userID, type);
 
-            if(player.net?.connection != null) player.SetPlayerFlag(BasePlayer.PlayerFlags.ReceivingSnapshot, true);
+            if (player.net?.connection != null)
+            {
+                player.SetPlayerFlag(BasePlayer.PlayerFlags.ReceivingSnapshot, true);
+            }
 
             player.SetParent(null, true, true);
             player.EnsureDismounted();
@@ -229,14 +249,25 @@ namespace Oxide.Plugins
             player.StartSleeping();
             player.SendNetworkUpdateImmediate(false);
 
-            if(player.net?.connection != null) player.ClientRPCPlayer(null, player, "StartLoading");
+            if (player.net?.connection != null)
+            {
+                player.ClientRPCPlayer(null, player, "StartLoading");
+            }
         }
 
         private void StartSleeping(BasePlayer player)
         {
-            if (player.IsSleeping()) return;
+            if (player.IsSleeping())
+            {
+                return;
+            }
+
             player.SetPlayerFlag(BasePlayer.PlayerFlags.Sleeping, true);
-            if (!BasePlayer.sleepingPlayerList.Contains(player)) BasePlayer.sleepingPlayerList.Add(player);
+            if (!BasePlayer.sleepingPlayerList.Contains(player))
+            {
+                BasePlayer.sleepingPlayerList.Add(player);
+            }
+
             player.CancelInvoke("InventoryUpdate");
             //player.inventory.crafting.CancelAll(true);
             //player.UpdatePlayerCollider(true, false);
@@ -248,7 +279,7 @@ namespace Oxide.Plugins
             {
                 if (start)
                 {
-                    TeleportTimers[userid].timer = timer.Once(TeleportTimers[userid].countdown, () => { Teleport(TeleportTimers[userid].source, TeleportTimers[userid].targetLocation, type); });
+                    TeleportTimers[userid].timer = timer.Once(TeleportTimers[userid].countdown, () => Teleport(TeleportTimers[userid].source, TeleportTimers[userid].targetLocation, type));
                 }
                 else
                 {
@@ -261,7 +292,7 @@ namespace Oxide.Plugins
             }
         }
 
-        void FindMonuments()
+        private void FindMonuments()
         {
             string name = null;
             int i = 0;
@@ -269,64 +300,80 @@ namespace Oxide.Plugins
             {
                 name = Regex.Match(monument.name, @"\w{6}\/(.+\/)(.+)\.(.+)").Groups[2].Value.Replace("_", " ").Replace(" 1", "").Titleize();
 
-                if(monument.name.Contains("compound"))
+                if (monument.name.Contains("compound"))
                 {
                     i++;
                     List<BaseEntity> ents = new List<BaseEntity>();
                     Vis.Entities(monument.transform.position, 50, ents);
-                    foreach(BaseEntity entity in ents)
+                    foreach (BaseEntity entity in ents)
                     {
-                        if(entity.PrefabName.Contains("piano"))
+                        if (entity.PrefabName.Contains("piano"))
                         {
-                            Vector3 outpost = entity.transform.position + new Vector3(1f, 0.1f, 1f);
-                            if (teleport.ContainsKey("outpost")) teleport["outpost"] = outpost;
-                            else teleport.Add("outpost", outpost);
+                            teleport["outpost"] = entity.transform.position + new Vector3(1f, 0.1f, 1f);
                         }
                     }
                 }
-                else if(monument.name.Contains("bandit"))
+                else if (monument.name.Contains("bandit"))
                 {
                     i++;
                     List<BaseEntity> ents = new List<BaseEntity>();
                     Vis.Entities(monument.transform.position, 50, ents);
-                    foreach(BaseEntity entity in ents)
+                    foreach (BaseEntity entity in ents)
                     {
-                        if(entity.PrefabName.Contains("workbench"))
+                        if (entity.PrefabName.Contains("workbench"))
                         {
-                            Vector3 bandit = Vector3.Lerp(monument.transform.position, entity.transform.position, 0.45f) + new Vector3(0, 1.5f, 0);
-                            if (teleport.ContainsKey("bandit")) teleport["bandit"] = bandit;
-                            else teleport.Add("bandit", bandit);
+                            teleport["bandit"] = Vector3.Lerp(monument.transform.position, entity.transform.position, 0.45f) + new Vector3(0, 1.5f, 0);
                         }
                     }
                 }
-                if (i > 1) break;
+                if (i > 1)
+                {
+                    break;
+                }
             }
             SaveData();
         }
 
         private void DoLog(string message)
         {
-            if(configData.Global.Debug) Puts($"{message}");
+            if (configData.Global.Debug)
+            {
+                Puts($"{message}");
+            }
         }
         #endregion
 
         #region config
         private class ConfigData
         {
-            public Global Global = new Global();
+            public Global Global;
             public VersionNumber Version;
         }
 
         private class Global
         {
-            public float DecayMultiplier = 0.5f;
-            public bool EnablePVE = true;
-            public bool Debug = false;
+            public float DecayMultiplier;
+            public bool EnablePVE;
+            public bool Debug;
         }
 
-        protected override void LoadDefaultConfig() => Puts("New configuration file created.");
+        protected override void LoadDefaultConfig()
+        {
+            Puts("Creating new config file.");
+            var config = new ConfigData
+            {
+                Global = new Global()
+                {
+                    DecayMultiplier = 0.5f,
+                    EnablePVE = true,
+                    Debug = false
+                },
+                Version = Version
+            };
+            SaveConfig(config);
+        }
 
-        void LoadConfigValues()
+        private void LoadConfigValues()
         {
             configData = Config.ReadObject<ConfigData>();
             configData.Version = Version;
