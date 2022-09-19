@@ -28,7 +28,7 @@ No home/sethome functionality exists.  Teleports are available only for bandit, 
   "Version": {
     "Major": 1,
     "Minor": 0,
-    "Patch": 1
+    "Patch": 5
   }
 }
 ```
@@ -40,6 +40,7 @@ No home/sethome functionality exists.  Teleports are available only for bandit, 
 
 ### Notes
   1. If JPipes is available, we will skip decay management for JPipes.
-  2. If any of NTeleportation, RTeleportation, Teleportication, TruePVE, NextGenPVE, or NoDecay are loaded when loading this plugin, action of this plugin will be disabled.
+  2. If any of NTeleportation, RTeleportation, Teleportication, TruePVE, NextGenPVE, or NoDecay are loaded when loading this plugin, action of this plugin will be disabled for those functions.
+    - e.g., if NoDecay is also loaded, only decay functions will be disabled within this plugin.
   3. If both DecayMultiplier == 1 and EnablePVE == false, this plugin will be a complete waste of resources...
 
