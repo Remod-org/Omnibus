@@ -2,18 +2,19 @@ using Oxide.Core;
 using Oxide.Core.Libraries.Covalence;
 using Oxide.Core.Plugins;
 using System.Collections.Generic;
-using System.Text.RegularExpressions;
 using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("Omnibus", "RFC1920", "1.0.4")]
+    [Info("Omnibus", "RFC1920", "1.0.5")]
     [Description("Simple all-in-one plugin for PVE, town teleport, and decay management")]
     internal class Omnibus : RustPlugin
     {
         #region vars
         private ConfigData configData;
-        private bool enabled = true;
+        private bool pveEnabled = true;
+        private bool decayEnabled = true;
+        private bool teleportEnabled = true;
 
         [PluginReference]
         private readonly Plugin JPipes, NoDecay, NextGenPVE, TruePVE, NTeleportation, RTeleportation, Teleportication;
@@ -36,33 +37,33 @@ namespace Oxide.Plugins
         {
             if (NoDecay != null)
             {
-                Puts("NoDecay will conflict.  Disabling Omnibus.");
-                enabled = false;
+                Puts("NoDecay will conflict.  Disabling Omnibus decay.");
+                decayEnabled = false;
             }
             if (TruePVE != null)
             {
-                Puts("TruePVE will conflict.  Disabling Omnibus.");
-                enabled = false;
+                Puts("TruePVE will conflict.  Disabling Omnibus PVE.");
+                pveEnabled = false;
             }
             if (NextGenPVE != null)
             {
-                Puts("NextGenPVE will conflict.  Disabling Omnibus.");
-                enabled = false;
+                Puts("NextGenPVE will conflict.  Disabling Omnibus PVE.");
+                pveEnabled = false;
             }
             if (NTeleportation != null)
             {
-                Puts("NTeleportation will conflict.  Disabling Omnibus.");
-                enabled = false;
+                Puts("NTeleportation will conflict.  Disabling Omnibus teleport.");
+                teleportEnabled = false;
             }
             if (RTeleportation != null)
             {
-                Puts("RTeleportation will conflict.  Disabling Omnibus.");
-                enabled = false;
+                Puts("RTeleportation will conflict.  Disabling Omnibus teleport.");
+                teleportEnabled = false;
             }
             if (Teleportication != null)
             {
-                Puts("Teleportication will conflict.  Disabling Omnibus.");
-                enabled = false;
+                Puts("Teleportication will conflict.  Disabling Omnibus teleport.");
+                teleportEnabled = false;
             }
 
             permission.RegisterPermission(permAdmin, this);
@@ -103,15 +104,8 @@ namespace Oxide.Plugins
         [Command("town")]
         private void CmdTownTeleport(IPlayer iplayer, string command, string[] args)
         {
-            if (!enabled)
-            {
-                return;
-            }
-
-            if (iplayer.Id == "server_console")
-            {
-                return;
-            }
+            if (!teleportEnabled) return;
+            if (iplayer.Id == "server_console") return;
 
             var player = iplayer.Object as BasePlayer;
             if (args.Length > 0 && args[0] == "set")
@@ -146,23 +140,17 @@ namespace Oxide.Plugins
         #region main
         private object OnEntityTakeDamage(BaseCombatEntity entity, HitInfo hitinfo)
         {
-            if (!enabled)
-            {
-                return null;
-            }
-
-            if (entity == null || hitinfo == null)
-            {
-                return null;
-            }
+            if (!(decayEnabled || pveEnabled)) return null;
+            if (entity == null || hitinfo == null) return null;
 
             float damageAmount = 0f;
             string entity_name = entity.LookupPrefab().name;
             ulong owner = entity.OwnerID;
 
-            switch(hitinfo.damageTypes.GetMajorityDamageType().ToString())
+            switch (hitinfo.damageTypes.GetMajorityDamageType().ToString())
             {
                 case "Decay":
+                    if (!decayEnabled) return null;
                     float before = hitinfo.damageTypes.Get(Rust.DamageType.Decay);
                     damageAmount = before * configData.Global.DecayMultiplier;
 
@@ -195,6 +183,7 @@ namespace Oxide.Plugins
                     });
                     return true; // Cancels this hook (for decay only).  Decay handled on NextTick.
                 default:
+                    if (!pveEnabled) return null;
                     if (configData.Global.EnablePVE)
                     {
                         try
@@ -294,28 +283,32 @@ namespace Oxide.Plugins
 
         private void FindMonuments()
         {
-            string name = null;
-            int i = 0;
             foreach (MonumentInfo monument in UnityEngine.Object.FindObjectsOfType<MonumentInfo>())
             {
-                name = Regex.Match(monument.name, @"\w{6}\/(.+\/)(.+)\.(.+)").Groups[2].Value.Replace("_", " ").Replace(" 1", "").Titleize();
-
-                if (monument.name.Contains("compound"))
+                if (monument.name.Contains("compound", System.Globalization.CompareOptions.OrdinalIgnoreCase))
                 {
-                    i++;
+                    Vector3 mt = Vector3.zero;
+                    Vector3 bbq = Vector3.zero;
                     List<BaseEntity> ents = new List<BaseEntity>();
                     Vis.Entities(monument.transform.position, 50, ents);
                     foreach (BaseEntity entity in ents)
                     {
-                        if (entity.PrefabName.Contains("piano"))
+                        if (entity.PrefabName.Contains("marketterminal") && mt == Vector3.zero)
                         {
-                            teleport["outpost"] = entity.transform.position + new Vector3(1f, 0.1f, 1f);
+                            mt = entity.transform.position;
+                        }
+                        else if (entity.PrefabName.Contains("bbq"))
+                        {
+                            bbq = entity.transform.position;
                         }
                     }
+                    if (mt != Vector3.zero && bbq != Vector3.zero)
+                    {
+                        teleport["outpost"] = Vector3.Lerp(mt, bbq, 0.3f) + new Vector3(1f, 0.1f, 1f);
+                    }
                 }
-                else if (monument.name.Contains("bandit"))
+                else if (monument.name.Contains("bandit", System.Globalization.CompareOptions.OrdinalIgnoreCase))
                 {
-                    i++;
                     List<BaseEntity> ents = new List<BaseEntity>();
                     Vis.Entities(monument.transform.position, 50, ents);
                     foreach (BaseEntity entity in ents)
@@ -326,10 +319,7 @@ namespace Oxide.Plugins
                         }
                     }
                 }
-                if (i > 1)
-                {
-                    break;
-                }
+                if (teleport["outpost"] != null & teleport["bandit"] != null) break;
             }
             SaveData();
         }
