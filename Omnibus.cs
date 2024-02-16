@@ -6,7 +6,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("Omnibus", "RFC1920", "1.0.5")]
+    [Info("Omnibus", "RFC1920", "1.0.6")]
     [Description("Simple all-in-one plugin for PVE, town teleport, and decay management")]
     internal class Omnibus : RustPlugin
     {
@@ -17,7 +17,7 @@ namespace Oxide.Plugins
         private bool teleportEnabled = true;
 
         [PluginReference]
-        private readonly Plugin JPipes, NoDecay, NextGenPVE, TruePVE, NTeleportation, RTeleportation, Teleportication;
+        private readonly Plugin JPipes;
 
         private readonly Dictionary<ulong, TPTimer> TeleportTimers = new Dictionary<ulong, TPTimer>();
         private Dictionary<string, Vector3> teleport = new Dictionary<string, Vector3>();
@@ -35,41 +35,44 @@ namespace Oxide.Plugins
 
         private void Init()
         {
-            if (NoDecay != null)
+            if (plugins.Exists("NoDecay"))
             {
                 Puts("NoDecay will conflict.  Disabling Omnibus decay.");
                 decayEnabled = false;
             }
-            if (TruePVE != null)
+            if (plugins.Exists("TruePVE"))
             {
                 Puts("TruePVE will conflict.  Disabling Omnibus PVE.");
                 pveEnabled = false;
             }
-            if (NextGenPVE != null)
+            if (plugins.Exists("NextGenPVE"))
             {
                 Puts("NextGenPVE will conflict.  Disabling Omnibus PVE.");
                 pveEnabled = false;
             }
-            if (NTeleportation != null)
+            if (plugins.Exists("NTeleportation"))
             {
                 Puts("NTeleportation will conflict.  Disabling Omnibus teleport.");
                 teleportEnabled = false;
             }
-            if (RTeleportation != null)
+            if (plugins.Exists("RTeleportation"))
             {
                 Puts("RTeleportation will conflict.  Disabling Omnibus teleport.");
                 teleportEnabled = false;
             }
-            if (Teleportication != null)
+            if (plugins.Exists("Teleportication"))
             {
                 Puts("Teleportication will conflict.  Disabling Omnibus teleport.");
                 teleportEnabled = false;
             }
 
             permission.RegisterPermission(permAdmin, this);
-            AddCovalenceCommand("town", "CmdTownTeleport");
-            AddCovalenceCommand("bandit", "CmdTownTeleport");
-            AddCovalenceCommand("outpost", "CmdTownTeleport");
+            if (teleportEnabled)
+            {
+                AddCovalenceCommand("town", "CmdTownTeleport");
+                AddCovalenceCommand("bandit", "CmdTownTeleport");
+                AddCovalenceCommand("outpost", "CmdTownTeleport");
+            }
             LoadData();
             FindMonuments();
         }
@@ -84,6 +87,7 @@ namespace Oxide.Plugins
                 ["town"] = "Town",
                 ["outpost"] = "Outpost",
                 ["bandit"] = "Bandit",
+                ["notset"] = "{0} location has not been set.",
                 ["townset"] = "Town location has been set to {0}!",
                 ["teleporting"] = "Teleporting to {0} in {1} seconds..."
             }, this);
@@ -124,15 +128,22 @@ namespace Oxide.Plugins
             }
             if (teleport.ContainsKey(command))
             {
-                if (!TeleportTimers.ContainsKey(player.userID))
+                if (teleport[command] != default(Vector3))
                 {
-                    TeleportTimers.Add(player.userID, new TPTimer() { type = command, start = Time.realtimeSinceStartup, countdown = 5f, source = player, targetName = Lang(command), targetLocation = teleport[command] });
-                    HandleTimer(player.userID, command, true);
-                    Message(iplayer, "teleporting", command, "5");
+                    if (!TeleportTimers.ContainsKey(player.userID))
+                    {
+                        TeleportTimers.Add(player.userID, new TPTimer() { type = command, start = Time.realtimeSinceStartup, countdown = 5f, source = player, targetName = Lang(command), targetLocation = teleport[command] });
+                        HandleTimer(player.userID, command, true);
+                        Message(iplayer, "teleporting", command, "5");
+                    }
+                    else if (TeleportTimers[player.userID].countdown == 0)
+                    {
+                        Teleport(player, teleport[command], command);
+                    }
                 }
-                else if (TeleportTimers[player.userID].countdown == 0)
+                else
                 {
-                    Teleport(player, teleport[command], command);
+                    Message(iplayer, "notset", command);
                 }
             }
         }
@@ -283,6 +294,9 @@ namespace Oxide.Plugins
 
         private void FindMonuments()
         {
+            if (!teleport.ContainsKey("bandit")) teleport.Add("bandit", default(Vector3));
+            if (!teleport.ContainsKey("outpost")) teleport.Add("outpost", default(Vector3));
+
             foreach (MonumentInfo monument in UnityEngine.Object.FindObjectsOfType<MonumentInfo>())
             {
                 if (monument.name.Contains("compound", System.Globalization.CompareOptions.OrdinalIgnoreCase))
@@ -319,7 +333,7 @@ namespace Oxide.Plugins
                         }
                     }
                 }
-                if (teleport["outpost"] != null & teleport["bandit"] != null) break;
+                if (teleport["outpost"] != default(Vector3) && teleport["bandit"] != default(Vector3)) break;
             }
             SaveData();
         }
