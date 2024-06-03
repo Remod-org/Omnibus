@@ -30,7 +30,7 @@ No home/sethome functionality exists.  Teleports are available only for bandit, 
     "RequirePermissionForPVE": false,
     "RequirePermissionForDecay": false,
     "RequirePermissionForTeleport": false,
-	"useClans": false,
+    "useClans": false,
     "useFriends": false,
     "useTeams": false
   },
