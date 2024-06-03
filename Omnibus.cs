@@ -6,7 +6,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("Omnibus", "RFC1920", "1.0.6")]
+    [Info("Omnibus", "RFC1920", "1.0.7")]
     [Description("Simple all-in-one plugin for PVE, town teleport, and decay management")]
     internal class Omnibus : RustPlugin
     {
@@ -17,11 +17,14 @@ namespace Oxide.Plugins
         private bool teleportEnabled = true;
 
         [PluginReference]
-        private readonly Plugin JPipes;
+        private readonly Plugin Friends, Clans, JPipes;
 
         private readonly Dictionary<ulong, TPTimer> TeleportTimers = new Dictionary<ulong, TPTimer>();
         private Dictionary<string, Vector3> teleport = new Dictionary<string, Vector3>();
         private const string permAdmin = "omnibus.admin";
+        private const string permPVE = "omnibus.pve";
+        private const string permDecay = "omnibus.decay";
+        private const string permTeleport = "omnibus.tp";
         #endregion
 
         #region Message
@@ -105,13 +108,29 @@ namespace Oxide.Plugins
             public Vector3 targetLocation;
         }
 
+        private bool PlayerCanTeleport(BasePlayer player)
+        {
+            if (player.IsNpc) return false;
+            return configData.Global.RequirePermissionForTeleport && permission.UserHasPermission(player?.UserIDString, permTeleport);
+        }
+
+        private bool PlayerIsProtected(BasePlayer player)
+        {
+            if (player.IsNpc) return false;
+            return configData.Global.RequirePermissionForPVE && permission.UserHasPermission(player?.UserIDString, permPVE);
+        }
+
         [Command("town")]
         private void CmdTownTeleport(IPlayer iplayer, string command, string[] args)
         {
             if (!teleportEnabled) return;
             if (iplayer.Id == "server_console") return;
 
-            var player = iplayer.Object as BasePlayer;
+            BasePlayer player = iplayer.Object as BasePlayer;
+            if (!PlayerCanTeleport(player))
+            {
+                return;
+            }
             if (args.Length > 0 && args[0] == "set")
             {
                 if (!iplayer.HasPermission(permAdmin)) { Message(iplayer, "notauthorized"); return; }
@@ -128,7 +147,7 @@ namespace Oxide.Plugins
             }
             if (teleport.ContainsKey(command))
             {
-                if (teleport[command] != default(Vector3))
+                if (teleport[command] != default)
                 {
                     if (!TeleportTimers.ContainsKey(player.userID))
                     {
@@ -162,6 +181,14 @@ namespace Oxide.Plugins
             {
                 case "Decay":
                     if (!decayEnabled) return null;
+                    if (configData.Global.RequirePermissionForDecay)
+                    {
+                        BasePlayer player = BaseNetworkable.serverEntities.Find(new NetworkableId(entity.OwnerID)) as BasePlayer;
+                        if (player != null && !permission.UserHasPermission(player.UserIDString, permDecay))
+                        {
+                            return null;
+                        }
+                    }
                     float before = hitinfo.damageTypes.Get(Rust.DamageType.Decay);
                     damageAmount = before * configData.Global.DecayMultiplier;
 
@@ -197,6 +224,38 @@ namespace Oxide.Plugins
                     if (!pveEnabled) return null;
                     if (configData.Global.EnablePVE)
                     {
+                        BaseEntity src = hitinfo?.Initiator;
+                        BaseEntity tgt = entity;
+                        string source = src?.GetType()?.Name;
+                        string target = entity?.GetType()?.Name;
+
+                        if (src is BasePlayer && PlayerIsProtected(src as BasePlayer))
+                        {
+                            try
+                            {
+                                object isfr = IsFriend((src as BasePlayer).userID, tgt.OwnerID);
+                                if (!ReferenceEquals(isfr, null) && isfr is bool && (bool)isfr)
+                                {
+                                    return null;
+                                }
+                            }
+                            catch { }
+                            return true;
+                        }
+                        if (tgt is BasePlayer && PlayerIsProtected(tgt as BasePlayer))
+                        {
+                            try
+                            {
+                                object isfr = IsFriend((src as BasePlayer).userID, (tgt as BasePlayer).userID);
+                                if (!ReferenceEquals(isfr, null) && isfr is bool && (bool)isfr)
+                                {
+                                    return null;
+                                }
+                            }
+                            catch { }
+                            return true;
+                        }
+
                         try
                         {
                             object CanTakeDamage = Interface.CallHook("CanEntityTakeDamage", new object[] { entity, hitinfo });
@@ -206,9 +265,6 @@ namespace Oxide.Plugins
                             }
                         }
                         catch { }
-
-                        string source = hitinfo.Initiator?.GetType().Name;
-                        string target = entity?.GetType().Name;
 
                         if (source == "BasePlayer" && target == "BasePlayer")
                         {
@@ -233,6 +289,39 @@ namespace Oxide.Plugins
         #endregion
 
         #region helpers
+        private object IsFriend(ulong playerid, ulong ownerid)
+        {
+            if (playerid == ownerid) return true;
+            if (configData.Global.useFriends && Friends != null)
+            {
+                object fr = Friends?.CallHook("AreFriends", playerid, ownerid);
+                if (fr != null && (bool)fr)
+                {
+                    DoLog($"Friends plugin reports that {playerid} and {ownerid} are friends.");
+                    return true;
+                }
+            }
+            if (configData.Global.useClans && Clans != null)
+            {
+                string playerclan = (string)Clans?.CallHook("GetClanOf", playerid);
+                string ownerclan = (string)Clans?.CallHook("GetClanOf", ownerid);
+                if (playerclan != null && ownerclan != null && playerclan == ownerclan)
+                {
+                    DoLog($"Clans plugin reports that {playerid} and {ownerid} are clanmates.");
+                    return true;
+                }
+            }
+            if (configData.Global.useTeams)
+            {
+                RelationshipManager.PlayerTeam playerTeam = RelationshipManager.ServerInstance.FindPlayersTeam(playerid);
+                if (playerTeam?.members.Contains(ownerid) == true)
+                {
+                    DoLog($"Rust teams reports that {playerid} and {ownerid} are on the same team.");
+                    return true;
+                }
+            }
+            return false;
+        }
         public void Teleport(BasePlayer player, Vector3 position, string type="")
         {
             HandleTimer(player.userID, type);
@@ -251,7 +340,7 @@ namespace Oxide.Plugins
 
             if (player.net?.connection != null)
             {
-                player.ClientRPCPlayer(null, player, "StartLoading");
+                player.ClientRPC(RpcTarget.Player("StartLoading", player));
             }
         }
 
@@ -358,19 +447,31 @@ namespace Oxide.Plugins
         {
             public float DecayMultiplier;
             public bool EnablePVE;
+            public bool RequirePermissionForPVE;
+            public bool RequirePermissionForDecay;
+            public bool RequirePermissionForTeleport;
+            public bool useClans;
+            public bool useFriends;
+            public bool useTeams;
             public bool Debug;
         }
 
         protected override void LoadDefaultConfig()
         {
             Puts("Creating new config file.");
-            var config = new ConfigData
+            ConfigData config = new ConfigData
             {
                 Global = new Global()
                 {
                     DecayMultiplier = 0.5f,
                     EnablePVE = true,
-                    Debug = false
+                    Debug = false,
+                    RequirePermissionForTeleport = false,
+                    RequirePermissionForDecay = false,
+                    RequirePermissionForPVE = false,
+                    useClans = false,
+                    useFriends = false,
+                    useTeams = false
                 },
                 Version = Version
             };

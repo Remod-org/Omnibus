@@ -1,5 +1,5 @@
 # Omnibus
-Simple all-in-one plugin for PVE, basic teleport,  and decay management for Rust
+Simple all-in-one plugin for PVE, basic teleport, and decay management for Rust
 
 This plugin has a simplified config and implementation compared to other PVE, teleport, and decay plugins.
 
@@ -9,6 +9,9 @@ No home/sethome functionality exists.  Teleports are available only for bandit, 
 
 ### Permissions
   - `omnibus.admin` -- Required only for /town set
+  - `omnibus.tp`    -- Required if RequirePermissionForTeleport is true and player needs teleport access
+  - `omnibus.decay` -- Required if RequirePermissionForDecay is true and player needs decay protection
+  - `omnibus.pve`   -- Required if RequirePermissionForPVE is true and player needs PVE access
 
 ### Commands
   - `/town` -- Go to town set by admin
@@ -23,12 +26,15 @@ No home/sethome functionality exists.  Teleports are available only for bandit, 
   "Global": {
     "DecayMultiplier": 0.5,
     "EnablePVE": true,
-    "Debug": false
+    "Debug": false,
+    "RequirePermissionForPVE": false,
+    "RequirePermissionForDecay": false,
+    "RequirePermissionForTeleport": false
   },
   "Version": {
     "Major": 1,
     "Minor": 0,
-    "Patch": 5
+    "Patch": 7
   }
 }
 ```
