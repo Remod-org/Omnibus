@@ -7,6 +7,10 @@ It will facilitate PVE (player to player and player to building), teleport to to
 
 No home/sethome functionality exists.  Teleports are available only for bandit, outpost, and town (if set).
 
+NEW for v 1.0.7:
+  - Permissions for pve, teleport, and decay prevention
+  - Friends/Clans/Teams support for PVE
+
 ### Permissions
   - `omnibus.admin` -- Required only for /town set
   - `omnibus.tp`    -- Required if RequirePermissionForTeleport is true and player needs teleport access
