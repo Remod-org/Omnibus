@@ -57,17 +57,17 @@ No home/sethome functionality exists.  Teleports are available only for bandit, 
 ### EXAMPLES
   
   - `Setting PVE for specific players`
-     a. Set RequirePermissionForPVE to true
-	 b. Add permission omnibus.pve to players/groups needing to play as PVE - all others will be PVP.
-	   Player's teammates/clan members/friends will be able to damage each other including buildings, etc.
+    - Set RequirePermissionForPVE to true
+    - Add permission omnibus.pve to players/groups needing to play as PVE - all others will be PVP.
+    - Player's teammates/clan members/friends will be able to damage each other including buildings, etc.
 
   - `Disabling Teleport`
-     a. Set RequirePermissionForTeleport to true
-	 b. DO NOT assign permission omnibus.tp to anyone
-	   Teleport is effectively disabled
+     - Set RequirePermissionForTeleport to true
+     - DO NOT assign permission omnibus.tp to anyone
+     - Teleport is effectively disabled
 
   - `Disabling Decay Prevention`
-     a. Set RequirePermissionForDecay to true
-	 b. DO NOT assign permission omnibus.decay to anyone
-	   Decay is effectively standard for all
+     - Set RequirePermissionForDecay to true
+     - DO NOT assign permission omnibus.decay to anyone
+     - Decay is effectively standard for all
 
