@@ -47,7 +47,7 @@ NEW for v 1.0.7:
 ```
 
   - `DecayMultiplier` -- Sets the global decay percentage.  1 is standard decay, 0.5 is 50%, etc.
-  - `EnablePVE` -- Prevent damage from player to player and player to other players' buildings
+  - `EnablePVE` -- Prevent damage from player to player and player to other players' buildings - NOTE that this must be set if you want to use permissions for PVE
   - `Debug` --  Log debug activity to oxide log and rcon.
   - `RequirePermissionForPVE` -- If true, players require omnibus.pve to prevent PVP damage
   - `RequirePermissionForDecay` -- If true, players require omnibus.decay to prevent decay damage
