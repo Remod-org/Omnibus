@@ -45,6 +45,12 @@ No home/sethome functionality exists.  Teleports are available only for bandit, 
   - `DecayMultiplier` -- Sets the global decay percentage.  1 is standard decay, 0.5 is 50%, etc.
   - `EnablePVE` -- Prevent damage from player to player and player to other players' buildings
   - `Debug` --  Log debug activity to oxide log and rcon.
+  - `RequirePermissionForPVE` -- If true, players require omnibus.pve to prevent PVP damage
+  - `RequirePermissionForDecay` -- If true, players require omnibus.decay to prevent decay damage
+  - `RequirePermissionForTeleport` - If true, players require omnibus.tp to use /town, /outpost, and /bandit
+  - `useClans` -- With the Clans plugin, membership will be checked for PVE damage
+  - `useFriends` -- With the Friends plugin, membership will be checked for PVE damage
+  - `useTeams` -- Using Rust Teams, membership will be checked for PVE damage
 
 
 ### Notes
