@@ -6,7 +6,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("Omnibus", "RFC1920", "1.0.7")]
+    [Info("Omnibus", "RFC1920", "1.0.8")]
     [Description("Simple all-in-one plugin for PVE, town teleport, and decay management")]
     internal class Omnibus : RustPlugin
     {
@@ -70,6 +70,9 @@ namespace Oxide.Plugins
             }
 
             permission.RegisterPermission(permAdmin, this);
+            permission.RegisterPermission(permDecay, this);
+            permission.RegisterPermission(permPVE, this);
+            permission.RegisterPermission(permTeleport, this);
             if (teleportEnabled)
             {
                 AddCovalenceCommand("town", "CmdTownTeleport");
@@ -236,10 +239,12 @@ namespace Oxide.Plugins
                                 object isfr = IsFriend((src as BasePlayer).userID, tgt.OwnerID);
                                 if (!ReferenceEquals(isfr, null) && isfr is bool && (bool)isfr)
                                 {
+                                    DoLog("Players are friends, allowing damage");
                                     return null;
                                 }
                             }
                             catch { }
+                            DoLog("Players are NOT friends, blocking damage");
                             return true;
                         }
                         if (tgt is BasePlayer && PlayerIsProtected(tgt as BasePlayer))
@@ -249,10 +254,12 @@ namespace Oxide.Plugins
                                 object isfr = IsFriend((src as BasePlayer).userID, (tgt as BasePlayer).userID);
                                 if (!ReferenceEquals(isfr, null) && isfr is bool && (bool)isfr)
                                 {
+                                    DoLog("Players are friends, allowing damage");
                                     return null;
                                 }
                             }
                             catch { }
+                            DoLog("Players are NOT friends, blocking damage");
                             return true;
                         }
 
