@@ -6,7 +6,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("Omnibus", "RFC1920", "1.0.8")]
+    [Info("Omnibus", "RFC1920", "1.0.9")]
     [Description("Simple all-in-one plugin for PVE, town teleport, and decay management")]
     internal class Omnibus : RustPlugin
     {
@@ -180,7 +180,7 @@ namespace Oxide.Plugins
             string entity_name = entity.LookupPrefab().name;
             ulong owner = entity.OwnerID;
 
-            switch (hitinfo.damageTypes.GetMajorityDamageType().ToString())
+            switch (hitinfo?.damageTypes?.GetMajorityDamageType().ToString())
             {
                 case "Decay":
                     if (!decayEnabled) return null;
