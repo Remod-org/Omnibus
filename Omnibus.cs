@@ -6,7 +6,7 @@ using UnityEngine;
 
 namespace Oxide.Plugins
 {
-    [Info("Omnibus", "RFC1920", "1.0.9")]
+    [Info("Omnibus", "RFC1920", "1.1.0")]
     [Description("Simple all-in-one plugin for PVE, town teleport, and decay management")]
     internal class Omnibus : RustPlugin
     {
@@ -113,13 +113,17 @@ namespace Oxide.Plugins
 
         private bool PlayerCanTeleport(BasePlayer player)
         {
+            if (player == null) return false;
             if (player.IsNpc) return false;
+            if (player.userID.IsSteamId()) return false;
             return configData.Global.RequirePermissionForTeleport && permission.UserHasPermission(player?.UserIDString, permTeleport);
         }
 
         private bool PlayerIsProtected(BasePlayer player)
         {
+            if (player == null) return false;
             if (player.IsNpc) return false;
+            if (player.userID.IsSteamId()) return false;
             return configData.Global.RequirePermissionForPVE && permission.UserHasPermission(player?.UserIDString, permPVE);
         }
 
